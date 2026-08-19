@@ -74,7 +74,7 @@ items:
     question: "Рассмотрены готовые решения из Lego до того, как изобретать своё?"
     severity: question
     evidence: "Явное упоминание рассмотренных компонентов Lego и причин, почему они (не) подошли"
-    norms: [norms/Lego.md]
+    norms: [norms/lego.md]
     hints: ["Lego <тип компонента>"]
 
   - id: ib-approval

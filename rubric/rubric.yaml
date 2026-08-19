@@ -69,13 +69,13 @@ items:
     severity: blocker
     evidence: "Названы измеримые метрики эффекта и способ/точка их измерения"
 
-  - id: t-lego
-    title: Готовые решения T-Lego
-    question: "Рассмотрены готовые решения из T-Lego до того, как изобретать своё?"
+  - id: Lego
+    title: Готовые решения Lego
+    question: "Рассмотрены готовые решения из Lego до того, как изобретать своё?"
     severity: question
-    evidence: "Явное упоминание рассмотренных компонентов T-Lego и причин, почему они (не) подошли"
-    norms: [norms/t-lego.md]
-    hints: ["T-Lego <тип компонента>"]
+    evidence: "Явное упоминание рассмотренных компонентов Lego и причин, почему они (не) подошли"
+    norms: [norms/Lego.md]
+    hints: ["Lego <тип компонента>"]
 
   - id: ib-approval
     title: Согласование с ИБ

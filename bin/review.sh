@@ -5,7 +5,7 @@
 #   ./bin/review.sh <confluence-url> --stage 2    # перегнать только этап 2 (и всё после — руками)
 #   ./bin/review.sh <confluence-url> --force      # перегнать всё с нуля
 #
-# Артефакты: workspace/<slug>/{adr.md, verdicts.json, substance.json, report.md}
+# Артефакты: workspace/<slug>/{adr.md, verdicts.json, substance.json, slop.json, task-prompt.md, report.md}
 # + prompt-stage*.md — реально отправленные промпты, для дебага.
 set -euo pipefail
 
@@ -105,8 +105,36 @@ else
   echo "── этап 3: уже есть, пропускаем"
 fi
 
-# ── Этап 4: отчёт (без LLM, чистый jq) ───────────────────────────────────────
-echo "── этап 4: собираем отчёт"
+# ── Этап 4: проверка на неосмысленную генерацию ──────────────────────────────
+if need 4 "$WS/slop.json"; then
+  echo "── этап 4: маркеры AI-дичи и вопросы на понимание"
+  awk -v adr="$WS/adr.md" '
+    /^\{\{ADR\}\}$/ { while ((getline l < adr) > 0) print l; close(adr); next }
+    { print }
+  ' "$ROOT/prompts/stage4-understanding.md" > "$WS/prompt-stage4.md"
+  run_llm "$WS/prompt-stage4.md" | extract_json > "$WS/slop.json"
+  jq -e '(.markers | type == "array") and (.comprehension_questions | type == "array")' \
+     "$WS/slop.json" >/dev/null \
+    || { echo "этап 4 вернул невалидный JSON — смотри $WS/slop.json" >&2; exit 1; }
+else
+  echo "── этап 4: уже есть, пропускаем"
+fi
+
+# ── Этап 5: абстрактный промпт задачи ────────────────────────────────────────
+if need 5 "$WS/task-prompt.md"; then
+  echo "── этап 5: промпт задачи для web-LLM"
+  awk -v adr="$WS/adr.md" '
+    /^\{\{ADR\}\}$/ { while ((getline l < adr) > 0) print l; close(adr); next }
+    { print }
+  ' "$ROOT/prompts/stage5-taskprompt.md" > "$WS/prompt-stage5.md"
+  run_llm "$WS/prompt-stage5.md" > "$WS/task-prompt.md"
+  [ -s "$WS/task-prompt.md" ] || { echo "этап 5 вернул пустоту" >&2; exit 1; }
+else
+  echo "── этап 5: уже есть, пропускаем"
+fi
+
+# ── Этап 6: отчёт (без LLM, чистый jq) ───────────────────────────────────────
+echo "── этап 6: собираем отчёт"
 {
   echo "# Первичное ревью ADR"
   echo
@@ -138,6 +166,18 @@ echo "── этап 4: собираем отчёт"
          else .findings[] | "- **[\(.rubric_id)]** \(.finding)\n  - источник: \(if .evidence_source == "" then "—" else .evidence_source end); уверенность: \(.confidence)"
          end' "$WS/substance.json"
   echo
+  echo "## Признаки генерации без понимания"
+  echo
+  jq -r 'if (.markers | length) == 0 then "_Не найдено._"
+         else .markers[] | "- **\(.marker)** (уверенность: \(.confidence))\n  - цитата: «\(.quote | gsub("\n"; " "))»\n  - \(.explanation)"
+         end' "$WS/slop.json"
+  echo
+  echo "## Вопросы на понимание (задать устно)"
+  echo
+  jq -r 'if (.comprehension_questions | length) == 0 then "_Нет._"
+         else .comprehension_questions[] | "- \(.question)\n  - к строке: «\(.quote | gsub("\n"; " "))»"
+         end' "$WS/slop.json"
+  echo
   echo "## Вопросы автору (копипаст в Confluence)"
   echo
   { jq -r '.items[] | select(.question_for_author != "" and .question_for_author != null) | "- \(.question_for_author)"' "$WS/verdicts.json"
@@ -145,6 +185,8 @@ echo "── этап 4: собираем отчёт"
   } | awk 'NF' | { grep . || echo "_Вопросов нет._"; }
   echo
   echo "---"
+  echo "_Промпт задачи для web-LLM (сравнить best practice с решением команды): \`task-prompt.md\` рядом с отчётом._"
+  echo
   echo "_Сгенерировано LLM — проверь каждый пункт перед отправкой автору._"
 } > "$WS/report.md"
 
